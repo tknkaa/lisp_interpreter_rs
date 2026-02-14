@@ -22,3 +22,14 @@ pub fn tokenize(raw: &str) -> Vec<String> {
     }
     tokens
 }
+
+#[derive(Debug, PartialEq)]
+pub enum Expr {
+    Symbol(String),
+    Number(u32),
+    List(Vec<Expr>),
+}
+
+pub fn parse(tokens: &Vec<&str>) -> Result<Expr, ()> {
+    Ok(Expr::Number(1))
+}
