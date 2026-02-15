@@ -30,6 +30,7 @@ pub enum Expr {
     Symbol(String),
     Number(i32),
     List(Vec<Expr>),
+    Bool(bool),
 }
 
 pub fn parse(tokens: &Vec<&str>) -> Result<Expr, String> {
@@ -58,7 +59,10 @@ fn parse_value(tokens: &Vec<&str>, cursor: &mut usize) -> Result<Expr, String> {
         *cursor += 1;
         match current.parse::<i32>() {
             Ok(num) => Ok(Expr::Number(num)),
-            Err(_) => Ok(Expr::Symbol(current.to_string())),
+            Err(_) => match current.parse::<bool>() {
+                Ok(c) => Ok(Expr::Bool(c)),
+                Err(_) => Ok(Expr::Symbol(current.to_string())),
+            },
         }
     }
 }
@@ -96,7 +100,7 @@ pub fn default_env() -> Env {
 pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
     match expr {
         Expr::Number(n) => Ok(Expr::Number(*n)),
-
+        Expr::Bool(b) => Ok(Expr::Bool(*b)),
         Expr::Symbol(s) => {
             let result = env.get(s);
             match result {
@@ -121,6 +125,21 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                             return Ok(value);
                         } else {
                             return Err("define requires a symbol as first argument".to_string());
+                        }
+                    }
+                    "if" => {
+                        if items.len() != 4 {
+                            return Err("if requires 3 arguments".to_string());
+                        }
+                        let cond = &items[1];
+                        if let Expr::Bool(c) = cond {
+                            if *c {
+                                return eval(&items[2], env);
+                            } else {
+                                return eval(&items[3], env);
+                            }
+                        } else {
+                            return Err("the first argument of if should be bool".to_string());
                         }
                     }
                     _ => {}

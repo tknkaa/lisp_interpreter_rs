@@ -25,7 +25,7 @@ fn main() {
     // Process each line/expression
     for (line_num, line) in contents.lines().enumerate() {
         let line = line.trim();
-        
+
         // Skip empty lines and comments
         if line.is_empty() || line.starts_with(';') {
             continue;
