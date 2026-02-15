@@ -115,9 +115,14 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
             }
 
             let func = &items[0];
+            // Special forms: These control when/if their arguments are evaluated
+            // They must be handled BEFORE evaluating arguments (unlike regular functions)
             if let Expr::Symbol(name) = func {
                 match name.as_str() {
                     "define" => {
+                        // Special form: (define x 10)
+                        // - x must NOT be evaluated (stays as symbol)
+                        // - only the value (10) is evaluated
                         let var_name = &items[1];
                         let value = eval(&items[2], env)?;
                         if let Expr::Symbol(var) = var_name {
@@ -128,23 +133,31 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                         }
                     }
                     "if" => {
+                        // Special form: (if condition then-branch else-branch)
+                        // - Only evaluates the condition first
+                        // - Then evaluates ONLY ONE branch (not both)
+                        // - Example: (if false 1 (/ 1 0)) won't error because (/ 1 0) never runs
                         if items.len() != 4 {
                             return Err("if requires 3 arguments".to_string());
                         }
-                        let cond = &items[1];
-                        if let Expr::Bool(c) = cond {
-                            if *c {
-                                return eval(&items[2], env);
-                            } else {
-                                return eval(&items[3], env);
-                            }
+                        let condition = eval(&items[1], env)?;
+                        let cond_bool = match condition {
+                            Expr::Bool(b) => b,
+                            Expr::Number(n) => n != 0,
+                            _ => return Err("if condition must be a boolean".to_string()),
+                        };
+                        if cond_bool {
+                            return eval(&items[2], env);
                         } else {
-                            return Err("the first argument of if should be bool".to_string());
+                            return eval(&items[3], env);
                         }
                     }
                     _ => {}
                 }
             }
+            // Regular functions: ALL arguments are evaluated first, then passed to the function
+            // This is done here (line below) BEFORE matching function names
+            // Example: (+ 1 (+ 2 3)) → evaluates 1 and (+ 2 3) first → (+ 1 5) → 6
             let args: Result<Vec<Expr>, String> =
                 items[1..].iter().map(|arg| eval(arg, env)).collect();
 
@@ -176,11 +189,9 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                             return Ok(Expr::Number((-1) * nums[0]));
                         }
                         let mut ans = nums[0] * 2;
-
                         for num in nums {
                             ans = ans - num;
                         }
-
                         return Ok(Expr::Number(ans));
                     }
 
@@ -195,10 +206,7 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                         if nums.len() < 2 {
                             return Err("* requires at least 2 numbers".to_string());
                         }
-                        let mut answer = 1;
-                        for num in nums {
-                            answer = answer * num;
-                        }
+                        let answer = nums.iter().fold(1, |acc, v| acc * v);
                         return Ok(Expr::Number(answer));
                     }
 
@@ -217,6 +225,76 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                             return Err("cannot divide by 0".to_string());
                         }
                         return Ok(Expr::Number(v0 / v1));
+                    }
+
+                    ">" => {
+                        if args.len() != 2 {
+                            return Err("> requires exactly 2 arguments".to_string());
+                        }
+                        let nums = args
+                            .iter()
+                            .map(|e| match e {
+                                Expr::Number(n) => Ok(*n),
+                                _ => Err("> requires numbers".to_string()),
+                            })
+                            .collect::<Result<Vec<i32>, String>>()?;
+                        return Ok(Expr::Bool(nums[0] > nums[1]));
+                    }
+
+                    "<" => {
+                        if args.len() != 2 {
+                            return Err("< requires exactly 2 arguments".to_string());
+                        }
+                        let nums = args
+                            .iter()
+                            .map(|e| match e {
+                                Expr::Number(n) => Ok(*n),
+                                _ => Err("< requires numbers".to_string()),
+                            })
+                            .collect::<Result<Vec<i32>, String>>()?;
+                        return Ok(Expr::Bool(nums[0] < nums[1]));
+                    }
+
+                    "<=" => {
+                        if args.len() != 2 {
+                            return Err("<= requires exactly 2 arguments".to_string());
+                        }
+                        let nums = args
+                            .iter()
+                            .map(|e| match e {
+                                Expr::Number(n) => Ok(*n),
+                                _ => Err("<= requires numbers".to_string()),
+                            })
+                            .collect::<Result<Vec<i32>, String>>()?;
+                        return Ok(Expr::Bool(nums[0] <= nums[1]));
+                    }
+
+                    ">=" => {
+                        if args.len() != 2 {
+                            return Err(">= requires exactly 2 arguments".to_string());
+                        }
+                        let nums = args
+                            .iter()
+                            .map(|e| match e {
+                                Expr::Number(n) => Ok(*n),
+                                _ => Err(">= requires numbers".to_string()),
+                            })
+                            .collect::<Result<Vec<i32>, String>>()?;
+                        return Ok(Expr::Bool(nums[0] >= nums[1]));
+                    }
+
+                    "=" => {
+                        if args.len() != 2 {
+                            return Err("= requires exactly 2 arguments".to_string());
+                        }
+                        let nums = args
+                            .iter()
+                            .map(|e| match e {
+                                Expr::Number(n) => Ok(*n),
+                                _ => Err("= requires numbers".to_string()),
+                            })
+                            .collect::<Result<Vec<i32>, String>>()?;
+                        return Ok(Expr::Bool(nums[0] == nums[1]));
                     }
                     _ => Err(format!("unknown function: {}", func_name)),
                 }
