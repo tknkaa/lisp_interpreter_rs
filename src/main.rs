@@ -57,6 +57,6 @@ fn main() {
         };
 
         // Print result
-        println!("{:?}", result);
+        println!("{}", result);
     }
 }

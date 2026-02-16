@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 pub fn tokenize(raw: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
@@ -31,6 +32,34 @@ pub enum Expr {
     Number(i32),
     List(Vec<Expr>),
     Bool(bool),
+    Lambda {
+        params: Vec<String>,
+        body: Box<Expr>,
+        closure_env: Env,
+    },
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expr::Number(n) => write!(f, "{}", n),
+            Expr::Bool(b) => write!(f, "{}", b),
+            Expr::Symbol(s) => write!(f, "{}", s),
+            Expr::List(items) => {
+                write!(f, "(")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, ")")
+            }
+            Expr::Lambda { params, .. } => {
+                write!(f, "<function({})>", params.join(", "))
+            }
+        }
+    }
 }
 
 pub fn parse(tokens: &Vec<&str>) -> Result<Expr, String> {
@@ -108,6 +137,15 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                 None => Err(format!("undefined variable: {}", s)),
             }
         }
+        Expr::Lambda {
+            params,
+            body,
+            closure_env,
+        } => Ok(Expr::Lambda {
+            params: params.clone(),
+            body: body.clone(),
+            closure_env: closure_env.clone(),
+        }),
 
         Expr::List(items) => {
             if items.is_empty() {
@@ -152,6 +190,39 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                             return eval(&items[3], env);
                         }
                     }
+                    "lambda" => {
+                        // Special form: (lambda (x y) (+ x y))
+                        // - Parameters are NOT evaluated (stay as symbols)
+                        // - Body is NOT evaluated yet (evaluated when function is called)
+                        // - Captures the current environment (closure)
+                        if items.len() != 3 {
+                            return Err("lambda requires 2 arguments: params and body".to_string());
+                        }
+
+                        let params = match &items[1] {
+                            Expr::List(param_list) => {
+                                let mut params = Vec::new();
+                                for param in param_list {
+                                    if let Expr::Symbol(name) = param {
+                                        params.push(name.clone());
+                                    } else {
+                                        return Err("lambda parameters must be symbols".to_string());
+                                    }
+                                }
+                                params
+                            }
+                            _ => return Err("lambda parameters must be a list".to_string()),
+                        };
+
+                        let body = Box::new(items[2].clone());
+                        let closure_env = env.clone();
+
+                        return Ok(Expr::Lambda {
+                            params,
+                            body,
+                            closure_env,
+                        });
+                    }
                     _ => {}
                 }
             }
@@ -162,6 +233,52 @@ pub fn eval(expr: &Expr, env: &mut Env) -> Result<Expr, String> {
                 items[1..].iter().map(|arg| eval(arg, env)).collect();
 
             let args = args?;
+
+            // Check if func is a Symbol (built-in operator or variable holding a lambda)
+            // or if it needs evaluation (e.g., nested lambda call)
+            let func_evaled = if let Expr::Symbol(name) = func {
+                // Try to get from environment (might be a user-defined function)
+                if let Some(val) = env.get(name) {
+                    val.clone()
+                } else {
+                    // It's a built-in function, keep as symbol
+                    func.clone()
+                }
+            } else {
+                // Not a symbol, evaluate it (e.g., ((lambda ...) args))
+                eval(func, env)?
+            };
+
+            // Check if it's a user-defined function (lambda)
+            if let Expr::Lambda {
+                params,
+                body,
+                closure_env,
+            } = func_evaled
+            {
+                if params.len() != args.len() {
+                    return Err(format!(
+                        "function expects {} arguments, got {}",
+                        params.len(),
+                        args.len()
+                    ));
+                }
+
+                // Create new environment: start with current env (for recursion),
+                // then add closure env (for lexical scoping), then params
+                let mut new_env = env.clone();
+                for (k, v) in closure_env.iter() {
+                    new_env.insert(k.clone(), v.clone());
+                }
+
+                // Bind parameters to arguments
+                for (param, arg) in params.iter().zip(args.iter()) {
+                    new_env.insert(param.clone(), arg.clone());
+                }
+
+                // Evaluate body in the new environment
+                return eval(&body, &mut new_env);
+            }
 
             if let Expr::Symbol(func_name) = func {
                 match func_name.as_str() {

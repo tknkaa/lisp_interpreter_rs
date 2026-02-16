@@ -66,3 +66,46 @@
 (define m 15)
 (define n 10)
 (if (> m n) (+ m n) (- m n))
+
+; User-defined functions (lambda)
+; Simple function: double a number
+(define double (lambda (x) (* x 2)))
+(double 5)
+(double 10)
+
+; Multi-parameter function
+(define add (lambda (x y) (+ x y)))
+(add 3 7)
+(add 100 200)
+
+; Function with complex body
+(define square (lambda (x) (* x x)))
+(square 4)
+(square 9)
+
+; Function using other functions
+(define sum-of-squares (lambda (a b) (+ (square a) (square b))))
+(sum-of-squares 3 4)
+
+; Recursive function: factorial
+(define factorial (lambda (n) (if (<= n 1) 1 (* n (factorial (- n 1))))))
+(factorial 5)
+(factorial 6)
+
+; Recursive function: fibonacci
+(define fib (lambda (n) (if (<= n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
+(fib 1)
+(fib 5)
+(fib 8)
+
+; Closure example: function that creates functions
+(define make-adder (lambda (x) (lambda (y) (+ x y))))
+(define add5 (make-adder 5))
+(define add10 (make-adder 10))
+(add5 3)
+(add10 7)
+
+; Function returning functions based on condition
+(define make-multiplier (lambda (factor) (lambda (x) (* x factor))))
+(define times3 (make-multiplier 3))
+(times3 10)
